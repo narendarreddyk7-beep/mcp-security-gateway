@@ -37,14 +37,14 @@ injection.
 | scenario runner + benchmark | working |
 | s01 direct injection | lands (as intended) |
 | s04 confused deputy | lands (as intended) |
-| http transport | not started |
+| http transport | not implemented (stdio only; see Limitations) |
 | manifest auditor | working, cross-server report |
 | policy engine | working, 4 actions, default deny |
 | approval broker | working, fails closed |
 | taint tracker | working, fine + coarse, both benchmarked |
-| inspectors | not started |
+| content inspectors | subsumed into taint + manifest layers |
 | scenario suite | 5 attacks, 5 benign controls |
-| dashboard | not started |
+| dashboard | working (FastAPI live view + benchmark page) |
 
 ## Quickstart
 
@@ -131,6 +131,49 @@ An obvious objection: why not just block email to external recipients? It does
 not generalise. The same exfiltration works through any egress tool, a
 recipient allowlist breaks every legitimate external email, and the attacker
 picks another channel. Taint addresses what is actually wrong with the call.
+
+## Limitations
+
+Written here deliberately. Every one of these is a real boundary of what the
+project does, and stating them is part of the point - a security tool whose
+author cannot list its weaknesses has not been measured.
+
+**Content-based taint is defeated by fragmentation.** This is the headline
+finding, demonstrated by s06 and quantified in `docs/sweep.json`. Splitting a
+secret into pieces shorter than the overlap threshold defeats the sensitive
+match. Lowering the threshold far enough to catch small fragments makes it fire
+on coincidental short strings in ordinary traffic. The only complete answer is
+coarse taint, which costs utility. There is no free setting.
+
+**Taint cannot separate sharing from exfiltration.** Control b02 - emailing
+your own notes to a colleague - is blocked by the same rule that stops the
+attack, because both send private data to an egress tool. 20% false positives
+across the benign controls is the measured cost. The likely fix is
+`require_approval` rather than `deny` on `sensitive_egress`, turning a hard
+block into a human decision; it is scaffolded but not yet benchmarked.
+
+**The compliant agent is a worst case, not a real model.** It obeys every
+injected instruction, which makes the security numbers a conservative lower
+bound: a real model sometimes refuses on its own. It also means the benchmark
+does not measure how often a model *falls* for an injection - only what happens
+when it does. A real-model backend is scaffolded (fixtures carry both prose and
+machine-readable directives) but not wired up.
+
+**stdio transport only.** The proxy speaks the stdio MCP transport. The
+streamable-HTTP transport is not implemented, so servers that only speak HTTP
+are out of scope for now. The interceptor seam is transport-agnostic, so this
+is an additive change, not a redesign.
+
+**Capability classification is heuristic for unknown tools.** Tools named in
+the policy are classified authoritatively; tools that are not are classified by
+keyword heuristics and flagged as unclassified. A deliberately mislabelled tool
+description could evade the heuristic, though the auditor reports the tool as
+unclassified either way.
+
+**Not tested against an adaptive attacker.** The scenario suite is a fixed set
+of known attack shapes. It does not include an attacker that adapts to the
+gateway's responses, and the compliant agent does not retry or route around a
+denial. Measuring evasion under adaptation is future work.
 
 ## Design rules
 

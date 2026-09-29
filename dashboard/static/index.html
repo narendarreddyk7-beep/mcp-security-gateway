@@ -81,19 +81,49 @@
   .taint-label { color: var(--taint); font-weight: 600; }
   .empty { color: var(--muted); padding: 40px; text-align: center; }
   .pill { font-family: var(--mono); font-size: 11px; color: var(--taint); }
+  .tab {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .tab.active { color: var(--text); border-color: var(--accent); background: var(--panel); }
+  #bench-view { padding: 24px; overflow-y: auto; height: calc(100vh - 57px); display: none; }
+  table.bench { border-collapse: collapse; margin: 8px 0 28px; font-size: 13px; }
+  table.bench th, table.bench td {
+    border: 1px solid var(--border); padding: 7px 14px; text-align: right; font-family: var(--mono);
+  }
+  table.bench th { color: var(--muted); font-weight: 600; text-align: right; }
+  table.bench td.name, table.bench th.name { text-align: left; }
+  .cell-leak { color: var(--deny); font-weight: 600; }
+  .cell-block { color: var(--allow); font-weight: 600; }
+  .cell-mid { color: var(--approve); }
+  .finding {
+    background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--taint);
+    border-radius: 8px; padding: 16px 20px; margin: 8px 0 28px; max-width: 780px;
+  }
+  .finding h3 { margin: 0 0 8px; font-size: 14px; }
+  .finding p { margin: 0 0 10px; color: var(--muted); }
+  .sweep-bar { display: flex; align-items: center; gap: 10px; margin: 3px 0; font-family: var(--mono); font-size: 12px; }
+  .sweep-bar .th { width: 36px; text-align: right; color: var(--muted); }
+  .sweep-bar .track { flex: 1; max-width: 380px; height: 20px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; position: relative; }
+  .sweep-bar .verdict-chip { width: 68px; font-weight: 600; }
 </style>
 </head>
 <body>
 <header>
   <h1>MCP Security Gateway</h1>
   <span class="sub">audit log viewer &middot; every tool call, verdict, and taint decision</span>
+  <nav style="margin-left:auto; display:flex; gap:4px;">
+    <button class="tab active" id="tab-sessions" onclick="showView('sessions')">Sessions</button>
+    <button class="tab" id="tab-bench" onclick="showView('bench')">Benchmark &amp; finding</button>
+  </nav>
 </header>
-<div class="layout">
+<div class="layout" id="sessions-view">
   <div class="sidebar" id="sidebar"></div>
   <div class="main" id="main">
     <div class="empty">Select a session on the left.</div>
   </div>
 </div>
+<div id="bench-view"></div>
 
 <script>
 // Everything rendered from the API is attacker-influenced (tool arguments,
@@ -114,6 +144,107 @@ function el(tag, cls, text) {
 }
 
 let active = null;
+
+function showView(which) {
+  document.getElementById("sessions-view").style.display = which === "sessions" ? "grid" : "none";
+  document.getElementById("bench-view").style.display = which === "bench" ? "block" : "none";
+  document.getElementById("tab-sessions").classList.toggle("active", which === "sessions");
+  document.getElementById("tab-bench").classList.toggle("active", which === "bench");
+  if (which === "bench") loadBenchmark();
+}
+
+const CONFIG_ORDER = ["none", "audit", "policy", "full", "coarse"];
+
+async function loadBenchmark() {
+  const view = document.getElementById("bench-view");
+  view.innerHTML = "";
+  const res = await fetch("/api/benchmark");
+  const data = await res.json();
+
+  if (!data.benchmark) {
+    view.appendChild(el("div", "empty",
+      "No benchmark.json yet. Run: python3 -m harness.bench --json docs/benchmark.json"));
+    return;
+  }
+
+  // Aggregate rows into per-config summary and per-scenario grid.
+  const rows = data.benchmark;
+  const byConfig = {};
+  const scenarios = {};
+  for (const r of rows) {
+    const c = byConfig[r.config] || (byConfig[r.config] = {attack:[], benign:[]});
+    (r.kind === "attack" ? c.attack : c.benign).push(r);
+    if (r.kind === "attack") (scenarios[r.scenario] = scenarios[r.scenario] || {})[r.config] = r.attack_succeeded;
+  }
+
+  view.appendChild(el("h2", null, "Attack success and utility cost").also(h => h.style.fontSize="16px"));
+
+  // Summary table
+  const t1 = el("table", "bench");
+  t1.innerHTML = `<tr><th class="name">config</th><th>attack success</th>
+    <th>benign done</th><th>false pos</th><th>task under attack</th></tr>`;
+  for (const cfg of CONFIG_ORDER) {
+    const c = byConfig[cfg]; if (!c) continue;
+    const asr = mean(c.attack.map(r=>r.attack_succeeded));
+    const bcr = mean(c.benign.map(r=>r.task_completed));
+    const tua = mean(c.attack.map(r=>r.task_completed));
+    const tr = el("tr");
+    tr.innerHTML = `<td class="name">${esc(cfg)}</td>
+      <td class="${asr>0?'cell-leak':'cell-block'}">${pct(asr)}</td>
+      <td>${pct(bcr)}</td>
+      <td class="${(1-bcr)>0?'cell-mid':''}">${pct(1-bcr)}</td>
+      <td>${pct(tua)}</td>`;
+    t1.appendChild(tr);
+  }
+  view.appendChild(t1);
+
+  // Per-scenario grid: the layered-defence argument
+  view.appendChild(el("h2", null, "Which layer stops which attack").also(h=>h.style.fontSize="16px"));
+  const t2 = el("table", "bench");
+  let head = `<tr><th class="name">scenario</th>` +
+    CONFIG_ORDER.map(c=>`<th>${esc(c)}</th>`).join("") + `</tr>`;
+  t2.innerHTML = head;
+  for (const sid of Object.keys(scenarios).sort()) {
+    const tr = el("tr");
+    let cells = `<td class="name">${esc(sid)}</td>`;
+    for (const cfg of CONFIG_ORDER) {
+      const leaked = scenarios[sid][cfg];
+      cells += `<td class="${leaked?'cell-leak':'cell-block'}">${leaked?'LEAK':'block'}</td>`;
+    }
+    tr.innerHTML = cells;
+    t2.appendChild(tr);
+  }
+  view.appendChild(t2);
+
+  // The finding + sweep
+  const f = el("div", "finding");
+  f.innerHTML = `<h3>The finding: fragmentation defeats content-based taint</h3>
+    <p>s06 splits the secret into six-character fragments. The sensitive-content
+    match only catches pieces this small when the overlap threshold drops to
+    roughly the fragment size &mdash; a value so low it fires on coincidental
+    short strings in ordinary traffic. Only content-blind coarse taint stops it,
+    at the utility cost shown above.</p>`;
+  view.appendChild(f);
+
+  if (data.sweep) {
+    view.appendChild(el("h2", null, "Threshold sweep (sensitive rule, s06)").also(h=>h.style.fontSize="16px"));
+    for (const row of data.sweep) {
+      const leaks = row.s06_attack_success === 1;
+      const bar = el("div", "sweep-bar");
+      bar.innerHTML = `<span class="th">${row.threshold}</span>
+        <span class="verdict-chip ${leaks?'cell-leak':'cell-block'}">${leaks?'LEAKS':'caught'}</span>
+        <span style="color:var(--muted)">${row.false_positives}/${row.benign_total} benign blocked</span>`;
+      view.appendChild(bar);
+    }
+  }
+}
+
+function mean(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+function pct(x){ return Math.round(x*100) + "%"; }
+// tiny chainable helper so we can style created elements inline
+Object.defineProperty(HTMLElement.prototype, "also", {
+  value: function(fn){ fn(this); return this; }, configurable: true
+});
 
 async function loadSessions() {
   const res = await fetch("/api/sessions");
