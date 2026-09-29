@@ -63,6 +63,33 @@ def test_manifest_auditor_flags_poisoned_description() -> None:
     assert "imperative_to_agent" in kinds
 
 
+def test_fragment_size_vs_threshold() -> None:
+    """The precise finding: with sensitive-content matching only, the six-char
+    fragments of s06 are caught at a threshold near the fragment size and leak
+    above it. This pins the crossover so the README's claim stays true."""
+    import os
+    import re
+
+    policy = ROOT / "policy" / "default.yaml"
+    base = policy.read_text()
+    sensitive_only = re.sub(
+        r'  - id: tainted_egress.*?reason: "Untrusted content reaching an egress tool"\n',
+        "", base, flags=re.DOTALL,
+    )
+    try:
+        policy.write_text(sensitive_only)
+        os.environ["MCPGW_MIN_OVERLAP"] = "4"
+        caught_low = not run(S / "s06_chunked_exfil", "full").attack_succeeded
+        os.environ["MCPGW_MIN_OVERLAP"] = "24"
+        leaks_high = run(S / "s06_chunked_exfil", "full").attack_succeeded
+    finally:
+        policy.write_text(base)
+        os.environ.pop("MCPGW_MIN_OVERLAP", None)
+
+    assert caught_low, "at threshold 4, fragments should be caught by content match"
+    assert leaks_high, "at threshold 24, six-char fragments must slip past"
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failures = 0

@@ -99,10 +99,24 @@ stopped by a different layer, and no single layer stops everything:
 
 **This is the headline finding, and it is a bypass of our own tool.**
 Content-based dataflow tracking has a fundamental weakness: an attacker who
-fragments or paraphrases the data defeats a matcher that looks for shared text.
-The unevadable answer, coarse taint, costs utility - it blocks the legitimate
-email in s04 (last column, 80%). There is a test asserting s06 still defeats
-fine mode, so this result cannot quietly disappear by tuning the threshold.
+fragments the secret defeats a matcher that looks for shared text. s06 splits
+the credential into six-character pieces. The `sensitive_egress` rule, which
+compares each call's arguments against the private note, only catches
+fragments this small when the overlap threshold is dropped to roughly the
+fragment size (4-6 characters) - a value so low it would match coincidental
+short strings in ordinary traffic and make the gateway unusable. The full
+sweep is in `docs/sweep.json`; `python -m harness.sweep` regenerates it.
+
+The unevadable answer is coarse taint, which ignores content and marks the
+whole session tainted after any private read. It stops s06, and it costs
+utility - it blocks the legitimate email in s04 (last column, 80%). Neither
+mode is free. A test asserts s06 still defeats fine mode at the default
+threshold, so this result cannot quietly disappear by tuning one number.
+
+(In the shipped policy the noisier `tainted_egress` rule also fires on the
+untrusted web content below threshold 24, which masks the effect in the default
+benchmark. The sweep isolates the `sensitive_egress` behaviour so the finding
+is not an artefact of the second rule.)
 
 **The false-positive column is real.** Control b02 emails the user's own notes
 to a colleague; private data legitimately reaches an egress tool, which is the

@@ -19,6 +19,7 @@ verbatim, and no keyword, score or recipient check is involved in noticing it.
 
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 import threading
@@ -35,6 +36,18 @@ UNTRUSTED = "untrusted"
 # tuned against the benign controls, and the sensitivity of this number is
 # itself a result worth reporting.
 MIN_OVERLAP = 24
+
+
+def current_threshold() -> int:
+    """Read at call time, from the environment, so a harness can vary it.
+
+    The matching runs inside gateway subprocesses. A threshold patched in the
+    harness process never reaches them - an earlier version of the sweep did
+    exactly that and reported every threshold as 24. The environment is the
+    one channel the children inherit.
+    """
+    raw = os.environ.get("MCPGW_MIN_OVERLAP")
+    return int(raw) if raw else MIN_OVERLAP
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS taint (
@@ -64,7 +77,9 @@ def normalise(text: str) -> str:
     return _WORD.sub("", text.lower())
 
 
-def overlaps(tainted: str, candidate: str, min_len: int = MIN_OVERLAP) -> bool:
+def overlaps(tainted: str, candidate: str, min_len: int | None = None) -> bool:
+    if min_len is None:
+        min_len = current_threshold()
     a, b = normalise(tainted), normalise(candidate)
     if len(a) < min_len or len(b) < min_len:
         return False

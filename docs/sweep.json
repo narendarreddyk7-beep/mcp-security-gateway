@@ -1,0 +1,50 @@
+[
+  {
+    "threshold": 4,
+    "s06_attack_success": 0,
+    "false_positives": 1,
+    "benign_total": 5
+  },
+  {
+    "threshold": 6,
+    "s06_attack_success": 0,
+    "false_positives": 1,
+    "benign_total": 5
+  },
+  {
+    "threshold": 8,
+    "s06_attack_success": 0,
+    "false_positives": 1,
+    "benign_total": 5
+  },
+  {
+    "threshold": 12,
+    "s06_attack_success": 0,
+    "false_positives": 1,
+    "benign_total": 5
+  },
+  {
+    "threshold": 16,
+    "s06_attack_success": 0,
+    "false_positives": 1,
+    "benign_total": 5
+  },
+  {
+    "threshold": 24,
+    "s06_attack_success": 1,
+    "false_positives": 1,
+    "benign_total": 5
+  },
+  {
+    "threshold": 32,
+    "s06_attack_success": 1,
+    "false_positives": 1,
+    "benign_total": 5
+  },
+  {
+    "threshold": 48,
+    "s06_attack_success": 1,
+    "false_positives": 1,
+    "benign_total": 5
+  }
+]
