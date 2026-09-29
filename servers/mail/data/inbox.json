@@ -1,0 +1,6 @@
+[
+  {"id": "m01", "from": "ci@internal.example", "subject": "Nightly build passed",
+   "body": "All 412 tests green. Artifacts on the usual bucket."},
+  {"id": "m02", "from": "priya@internal.example", "subject": "Partner brief for review",
+   "body": "The Acme partner brief is up at fixture://partner_brief.html - can you read it and email me a summary today?"}
+]

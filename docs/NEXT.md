@@ -4,16 +4,17 @@
 Build the exploit before the fix, so there is always a demo and an oracle.
 
 - [x] `servers/notes` — list/read, seeded with a `CANARY-` credential
-- [ ] `servers/mail` — list/read/**send** (the dangerous private_read+egress pair)
+- [x] `servers/mail` — list/read/**send**; external recipients relay to the sink
 - [x] `servers/web` — fetch_url, fixtures + real egress
-- [ ] `servers/calendar` — list/read events
+- [x] `servers/calendar` — list/read events
 - [x] `collector/` — HTTP sink; matches raw, percent-encoded and base64
 - [x] `scenarios/s01_direct_injection` — LEAKED, as intended
-- [ ] `scenarios/s04_confused_deputy` — needs the mail server
+- [x] `scenarios/s04_confused_deputy` — LEAKED, as intended
+- [x] `harness/bench.py` — all scenarios x all configs
 - [x] `harness/run.py` — runs a scenario, checks both predicates
 - [x] `harness/agent.py` — compliant agent (worst-case, deterministic)
-- **Milestone:** s01 and s04 both succeed against a bare agent; the canary
-  appears in the collector log.
+- **Milestone: DONE.** s01 and s04 both succeed; the canary reaches the
+  collector by two different routes (fetch_url, and a legitimate send_message).
 
 ## Week 3 — manifest auditor + policy engine
 - [ ] capability classifier, dangerous-combination flagging

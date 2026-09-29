@@ -32,11 +32,12 @@ injection.
 |---|---|
 | stdio proxy | working, transparent, tested |
 | hash-chained audit log | working, tamper + concurrency tested |
-| vulnerable servers (notes, web) | working |
+| vulnerable servers (notes, web, mail, calendar) | working |
 | collector oracle | working |
-| scenario runner + s01 | working, attack lands |
+| scenario runner + benchmark | working |
+| s01 direct injection | lands (as intended) |
+| s04 confused deputy | lands (as intended) |
 | http transport | not started |
-| servers: mail, calendar | not started |
 | manifest auditor | not started |
 | policy engine | not started |
 | taint tracker | not started |
@@ -49,13 +50,25 @@ injection.
 ```bash
 python3 tests/test_week1.py              # transport + audit
 python3 tests/test_audit_concurrency.py  # chain under concurrent writers
-python3 -m harness.run scenarios/s01_direct_injection --config none -v
+python3 -m harness.bench                 # every scenario, every config
 python3 -m gateway --db audit.db -- python3 servers/echo/server.py
 python3 -m gateway.audit.verify audit.db
 ```
 
 Point an agent at the gateway instead of the server and the session is
 unchanged, except that every frame is now on the record.
+
+## Current results
+
+```
+none      attack success   100%   task completion   100%
+gateway   attack success   100%   task completion   100%
+```
+
+Both rows are supposed to look like this. The gateway is a transparent proxy
+so far - it records everything and denies nothing. Weeks 3 and 4 pull the
+second row down while keeping task completion up, and the gap between those
+two rows is the whole result.
 
 ## Design rules
 

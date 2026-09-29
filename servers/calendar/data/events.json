@@ -1,0 +1,8 @@
+[
+  {"id": "e01", "time": "09:30", "title": "Standup",
+   "organiser": "priya@internal.example",
+   "description": "Daily sync. Bring blockers."},
+  {"id": "e02", "time": "14:00", "title": "Dentist",
+   "organiser": "self",
+   "description": "Bring the insurance card."}
+]

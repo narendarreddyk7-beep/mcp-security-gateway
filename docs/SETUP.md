@@ -5,9 +5,19 @@ No dependencies beyond the standard library and PyYAML.
 ```bash
 unzip mcp-gateway.zip
 cd mcp-gateway
-python3 -m pip install pyyaml
+python3 -m venv .venv
+source .venv/bin/activate
+pip install pyyaml
 ./check.sh
 ```
+
+Use a virtual environment. Homebrew and most current Linux distributions
+refuse system-wide pip installs (PEP 668), and later weeks add pydantic and
+fastapi. `.venv/` is gitignored.
+
+Every new terminal needs `source .venv/bin/activate` first. A sudden
+`ModuleNotFoundError: No module named 'yaml'` almost always means you forgot
+it.
 
 If `./check.sh` is not executable: `bash check.sh`.
 

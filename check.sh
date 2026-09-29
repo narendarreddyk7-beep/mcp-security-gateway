@@ -17,14 +17,14 @@ run() {
 
 run "transport + audit log"        $PY tests/test_week1.py
 run "audit chain under concurrency" $PY tests/test_audit_concurrency.py
-run "s01 without the gateway"      $PY -m harness.run scenarios/s01_direct_injection --config none
-run "s01 through the gateway"      $PY -m harness.run scenarios/s01_direct_injection --config gateway
+run "scenario benchmark"           $PY -m harness.bench
 
 if [ "$fail" -eq 0 ]; then
   echo "all checks passed"
   echo
-  echo "Both s01 runs should say attack=LEAKED. That is correct right now:"
-  echo "the gateway is still transparent. Week 3 is what makes it say blocked."
+  echo "Attack success should be 100% in both configurations right now."
+  echo "That is correct: the gateway is still transparent. Week 3 and week 4"
+  echo "are what pull the gateway row down."
 else
   echo "some checks failed - paste the output above"
 fi
