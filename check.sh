@@ -17,14 +17,23 @@ run() {
 
 run "transport + audit log"        $PY tests/test_week1.py
 run "audit chain under concurrency" $PY tests/test_audit_concurrency.py
+run "policy engine + manifest auditor" $PY tests/test_week3.py
+run "taint tracking"               $PY tests/test_week4.py
 run "scenario benchmark"           $PY -m harness.bench
 
 if [ "$fail" -eq 0 ]; then
   echo "all checks passed"
   echo
-  echo "Attack success should be 100% in both configurations right now."
-  echo "That is correct: the gateway is still transparent. Week 3 and week 4"
-  echo "are what pull the gateway row down."
+  echo "Read the table as an argument, not a scoreboard:"
+  echo "  audit   observation alone buys no security"
+  echo "  policy  scoping stops s01; s04 uses only permitted tools"
+  echo "  full    taint stops both, and costs 33% false positives"
+  echo "  coarse  unevadable, and kills the real email in s04 too"
+  echo
+  echo "b02 failing under full/coarse is a measured limitation, not a bug."
+  echo "Sharing your own notes is the commonest legitimate reason private"
+  echo "data reaches an egress tool, and the gateway cannot tell it apart"
+  echo "from exfiltration."
 else
   echo "some checks failed - paste the output above"
 fi

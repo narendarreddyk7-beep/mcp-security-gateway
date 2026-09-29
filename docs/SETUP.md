@@ -31,6 +31,25 @@ this for you. Running a file from inside its own folder will fail with
 Built and tested on 3.12, and kept free of private asyncio API so it runs on
 3.13 and 3.14. Minimum is 3.10.
 
+## Updating to a new build
+
+Each build is named for its week - `mcp-gateway-w4.zip`, `mcp-gateway-w5.zip` -
+so downloads never collide and your browser never renames one to `(1)`.
+
+```bash
+cd ~/Downloads/mcp-gateway
+./update.sh ~/Downloads/mcp-gateway-w5.zip
+./check.sh
+```
+
+`update.sh` refuses to run if you have uncommitted changes, leaves `.git` and
+`.venv` untouched, and prints `git status` afterwards so you can see exactly
+what arrived. If the file name is wrong it lists the archives it can find.
+
+Never double-click a zip in Finder for this project: Finder will not overwrite
+a folder, so it silently creates `mcp-gateway 2` and you end up running the old
+code from the old directory.
+
 ## First thing to do
 
 ```bash

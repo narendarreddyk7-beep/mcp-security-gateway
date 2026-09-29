@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Awaitable, Callable, Sequence
 
+from gateway import decision as D
 from gateway.audit.log import AuditLog
 from gateway.proxy import jsonrpc
 from gateway.proxy.jsonrpc import CLIENT_TO_SERVER, SERVER_TO_CLIENT, Message
@@ -29,14 +31,15 @@ from gateway.proxy.jsonrpc import CLIENT_TO_SERVER, SERVER_TO_CLIENT, Message
 # default line limit, which would raise LimitOverrunError mid-session.
 STREAM_LIMIT = 16 * 1024 * 1024
 
-# An interceptor sees a parsed message and returns the bytes to forward, or
-# None to drop the frame. Week 1 ships the pass-through; the policy engine and
-# taint tracker plug in here without touching the transport.
-Interceptor = Callable[[str, Message], Awaitable[bytes | None]]
+# An interceptor sees a parsed message and returns a Decision: what to forward
+# on, and what (if anything) to send back to the caller instead. A denial can
+# never simply drop the frame - the agent is blocking on a JSON-RPC response
+# and would hang - so the return path is part of the contract.
+Interceptor = Callable[[str, Message], Awaitable["D.Decision"]]
 
 
-async def passthrough(direction: str, message: Message) -> bytes | None:
-    return message.raw
+async def passthrough(direction: str, message: Message) -> D.Decision:
+    return D.allow(message.raw)
 
 
 class StdioProxy:
@@ -75,11 +78,15 @@ class StdioProxy:
             payload={"server_cmd": self.server_cmd, "pid": proc.pid},
         )
 
+        # Each pump gets a return path as well as a forward path, so a denied
+        # client-to-server frame can be answered on the client's own channel.
         up = asyncio.create_task(
-            self._pump(client_reader, proc.stdin, CLIENT_TO_SERVER), name="c2s"
+            self._pump(client_reader, proc.stdin, CLIENT_TO_SERVER, back=client_writer),
+            name="c2s",
         )
         down = asyncio.create_task(
-            self._pump(proc.stdout, client_writer, SERVER_TO_CLIENT), name="s2c"
+            self._pump(proc.stdout, client_writer, SERVER_TO_CLIENT, back=proc.stdin),
+            name="s2c",
         )
 
         # Shutdown is asymmetric, and getting it wrong silently truncates
@@ -125,6 +132,7 @@ class StdioProxy:
         reader: asyncio.StreamReader,
         writer,  # asyncio.StreamWriter (to server) or _StdoutWriter (to client)
         direction: str,
+        back=None,  # return path, for synthesised denials
     ) -> None:
         while True:
             try:
@@ -145,7 +153,9 @@ class StdioProxy:
             message = jsonrpc.parse(line)
             method = self._attribute(message, direction)
 
-            forward = await self.interceptor(direction, message)
+            started = time.perf_counter()
+            decision = await self.interceptor(direction, message)
+            latency_ms = (time.perf_counter() - started) * 1000
 
             self.audit.append(
                 session_id=self.session_id,
@@ -154,12 +164,24 @@ class StdioProxy:
                 method=method,
                 msg_id=message.msg_id,
                 payload=message.audit_payload(),
-                verdict="forward" if forward is not None else "drop",
+                verdict=decision.action,
+                rule_id=decision.rule_id,
+                latency_ms=latency_ms,
             )
 
-            if forward is None:
+            if decision.respond is not None and back is not None:
+                # The request never reaches the server. The caller gets an
+                # error on the channel it was already waiting on.
+                back.write(decision.respond)
+                try:
+                    await back.drain()
+                except (BrokenPipeError, ConnectionResetError):
+                    break
+
+            if decision.forward is None:
                 continue
-            writer.write(forward if forward.endswith(b"\n") else forward + b"\n")
+            raw = decision.forward
+            writer.write(raw if raw.endswith(b"\n") else raw + b"\n")
             try:
                 await writer.drain()
             except (BrokenPipeError, ConnectionResetError):

@@ -17,18 +17,31 @@ Build the exploit before the fix, so there is always a demo and an oracle.
   collector by two different routes (fetch_url, and a legitimate send_message).
 
 ## Week 3 — manifest auditor + policy engine
-- [ ] capability classifier, dangerous-combination flagging
-- [ ] tool-description injection detection, name-shadowing detection
-- [ ] policy schema (pydantic), evaluator, four actions only
-- [ ] approval broker, fail-closed timeout
-- **Milestone:** s01 fails, s04 still succeeds.
+- [x] capability classifier, dangerous-combination flagging
+- [x] tool-description injection detection (imperatives, secrecy, invisible chars)
+- [x] policy schema + evaluator, four actions, default deny
+- [x] approval broker, fails closed (auto-deny / auto-approve / prompt)
+- [x] cross-server manifest report over the audit log
+- [ ] name-shadowing detection wired into a scenario (needs s02)
+- **Milestone: DONE.** s01 blocked, s04 still leaks, task completion 100%.
 
 ## Week 4 — taint tracker
-- [ ] source labelling at the proxy boundary
-- [ ] fine-grained (normalised substring) and coarse-grained (session-wide)
-      propagation, both shipped, both benchmarked
-- [ ] sink enforcement on `egress`, declassification via approval only
-- **Milestone:** s04 fails. This is the week the project becomes distinctive.
+- [x] source labelling at the proxy boundary (sensitive + untrusted)
+- [x] cross-process taint store, session-scoped, shared via the audit db
+- [x] fine and coarse propagation, both shipped, both benchmarked
+- [x] sink enforcement on `egress`
+- [x] benign controls b01-b03, so false positives are measured
+- [ ] declassification via approval (currently a taint label is permanent)
+- **Milestone: DONE.** s04 blocked, task completion held at 100% under fine
+  taint, 33% false positives measured and documented.
+
+### Known gaps to close
+- [ ] paraphrase evasion: an agent that rewrites the secret defeats fine mode.
+      Needs a scenario that does this deliberately, and an honest number.
+- [ ] b02-style sharing: approval is the obvious answer (require_approval
+      rather than deny on sensitive_egress). Cheap to try, measure both.
+- [ ] chunked exfiltration (s06) will likely defeat the 24-character overlap
+      threshold. Vary MIN_OVERLAP and report the sensitivity curve.
 
 ## Week 5 — inspectors + full suite
 - [ ] three layers, shared signal contract with a `version` field

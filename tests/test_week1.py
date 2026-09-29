@@ -69,7 +69,10 @@ def test_audit_captures_session(tmp_db: str) -> None:
 
     call = next(e for e in events if e["method"] == "tools/call")
     assert json.loads(call["payload"])["params"]["name"] == "echo"
-    assert all(e["verdict"] in (None, "forward") for e in events)
+    # Transparent mode forwards every protocol frame. Gateway-generated
+    # records (manifest findings) carry their own verdicts and are not frames.
+    frames = [e for e in events if e["direction"] != "gateway"]
+    assert all(e["verdict"] == "allow" for e in frames), "transparent mode must allow every frame"
     log.close()
 
 
