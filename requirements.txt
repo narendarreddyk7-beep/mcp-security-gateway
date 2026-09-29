@@ -1,0 +1,6 @@
+# Week 1 runs on the standard library alone.
+# Added as the project grows:
+#   pydantic>=2        policy schema (week 3)
+#   pyyaml             policy + scenario manifests (week 3)
+#   mcp                official SDK, for the real servers (week 2)
+#   fastapi, uvicorn   dashboard API (week 6)
