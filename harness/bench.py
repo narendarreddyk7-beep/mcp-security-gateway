@@ -82,6 +82,22 @@ def main() -> int:
         tua = sum(r["task_completed"] for r in attacks) / max(len(attacks), 1)
         print(f"{config:<9} {asr:>14.0%} {bcr:>12.0%} {1 - bcr:>10.0%} {tua:>18.0%}")
 
+    # Per-category attack success, because a single number hides which attacks
+    # a layer actually stops. Being strong on injection and weak on chunked
+    # exfil is a finding, not something to average away.
+    cats = sorted({r["scenario"].split("_", 1)[0] for r in rows
+                   if r["kind"] == "attack"})
+    scen_ids = sorted({r["scenario"] for r in rows if r["kind"] == "attack"})
+    print("\nattack success by scenario")
+    print(f"{'scenario':<24} " + " ".join(f"{c:>7}" for c in CONFIGS))
+    for sid in scen_ids:
+        cells = []
+        for config in CONFIGS:
+            runs = [r for r in rows if r["scenario"] == sid and r["config"] == config]
+            rate = sum(r["attack_succeeded"] for r in runs) / max(len(runs), 1)
+            cells.append(f"{rate:>6.0%}")
+        print(f"{sid:<24} " + " ".join(f"{c:>7}" for c in cells))
+
     if args.json:
         Path(args.json).write_text(json.dumps(rows, indent=2))
         print(f"\nwrote {args.json}")

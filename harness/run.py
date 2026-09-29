@@ -95,6 +95,7 @@ def run(scenario_dir: Path, config: str, verbose: bool = False) -> Outcome:
                 name,
                 server_cmd(name, config, audit_db, spec["task_class"], session_id),
                 cwd=str(ROOT),
+                env=spec.get("env", {}).get(name),
             )
             client.initialize()
             client.list_tools()
@@ -107,10 +108,14 @@ def run(scenario_dir: Path, config: str, verbose: bool = False) -> Outcome:
         # no attack to succeed, and the only question is whether the gateway
         # let ordinary work through.
         success = spec.get("success_predicate")
-        leaked = (
-            collector.contains(success["collector_contains"], log_path)
-            if success else False
-        )
+        leaked = False
+        if success:
+            if "collector_contains" in success:
+                leaked = collector.contains(success["collector_contains"], log_path)
+            if not leaked and "collector_reassembles" in success:
+                leaked = collector.reassembles(
+                    success["collector_reassembles"], log_path
+                )
         blob = "\n".join(result.output)
         completed = all(s in blob for s in spec["benign_predicate"].get("output_contains", []))
 

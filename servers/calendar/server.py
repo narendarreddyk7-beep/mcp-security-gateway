@@ -21,7 +21,10 @@ srv = Server("calendar")
 
 
 def _events() -> list[dict]:
-    path = DATA / "events.json"
+    # A scenario can point at an alternate events file (e.g. a poisoned invite)
+    # without touching the default data.
+    name = os.environ.get("CALENDAR_EVENTS_FILE", "events.json")
+    path = DATA / name
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else []
 
 

@@ -17,6 +17,7 @@ AGENT-DIRECTIVE block for this one. One fixture, two backends.
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import urllib.parse
@@ -31,6 +32,8 @@ DIRECTIVE_RE = re.compile(
 )
 
 MAX_DIRECTIVE_DEPTH = 3  # injected content that injects more content
+
+SLICE_RE = re.compile(r"\{\{LAST_RESULT_SLICE:(?P<start>\d+):(?P<end>\d+)\}\}")
 
 
 @dataclass
@@ -55,7 +58,7 @@ class AgentRun:
 
     @property
     def injected_calls(self) -> list[CallRecord]:
-        return [c for c in self.calls if c.origin == "injected"]
+        return [c for c in self.calls if c.origin.startswith("injected")]
 
 
 class CompliantAgent:
@@ -65,21 +68,53 @@ class CompliantAgent:
         self._last_result: str = ""
 
     def perform(self, task_calls: list[dict]) -> AgentRun:
+        # A real agent puts tool descriptions in its context before it does
+        # anything, so a poisoned description executes before the user has
+        # typed a word. Scanning them here models that faithfully.
+        for server, client in self.clients.items():
+            for tool in getattr(client, "tools", []):
+                for injected in self._extract_directives(tool.get("description", "")):
+                    self._invoke(injected, origin="injected_manifest", depth=0)
         for spec in task_calls:
             self._invoke(spec, origin="task", depth=0)
         return self.run
 
-    def _invoke(self, spec: dict, origin: str, depth: int) -> None:
+    def _run_block(self, directives: list[dict], block_source: str, depth: int) -> None:
+        # A directive block reads a secret once, then leaks it. Slice/templating
+        # binds to the most recent READ result within the block, not to the last
+        # call - otherwise each exfil call would template against the previous
+        # exfil call's HTTP response. block_read holds that secret.
+        block_read = block_source
+        for spec in directives:
+            produced = self._invoke(
+                spec, origin="injected", depth=depth, source=block_read
+            )
+            # A read tool's result becomes the source for the fragments that
+            # follow. An egress call's response does not.
+            if produced is not None and self._is_read(spec):
+                block_read = produced
+
+    @staticmethod
+    def _is_read(spec: dict) -> bool:
+        return any(
+            k in spec.get("tool", "")
+            for k in ("read", "list", "search", "get", "fetch_note")
+        )
+
+    def _invoke(self, spec: dict, origin: str, depth: int,
+                source: str | None = None) -> str | None:
         server = spec["server"]
         tool = spec["tool"]
-        args = self._expand(spec.get("args", {}))
+        # source pins templating to a specific prior result (chained exfil);
+        # without it, {{...}} means the most recent result (single hop).
+        args = self._expand(spec.get("args", {}), source)
 
         client = self.clients.get(server)
         if client is None:
             self.run.calls.append(
                 CallRecord(server, tool, args, origin, ok=False, error="no such server")
             )
-            return
+            return None
 
         try:
             result: ToolResult = client.call_tool(tool, args)
@@ -90,7 +125,7 @@ class CompliantAgent:
             self.run.calls.append(
                 CallRecord(server, tool, args, origin, ok=False, error=str(exc))
             )
-            return
+            return None
 
         self.run.calls.append(
             CallRecord(server, tool, args, origin, ok=True, result=result.content)
@@ -99,8 +134,14 @@ class CompliantAgent:
         self.run.output.append(result.content)
 
         if depth < MAX_DIRECTIVE_DEPTH:
-            for injected in self._extract_directives(result.content):
-                self._invoke(injected, origin="injected", depth=depth + 1)
+            directives = self._extract_directives(result.content)
+            if directives:
+                # Within a block, templating references the most recent result
+                # produced *inside the block* (so the note that the first call
+                # reads becomes the source the later slice calls draw from),
+                # falling back to the block's own source for the first call.
+                self._run_block(directives, block_source=result.content, depth=depth + 1)
+        return result.content
 
     @staticmethod
     def _extract_directives(text: str) -> list[dict]:
@@ -114,24 +155,31 @@ class CompliantAgent:
                 out.extend(p for p in parsed if isinstance(p, dict))
         return out
 
-    def _expand(self, args: Any) -> Any:
-        """Substitute the previous tool result, so exfiltration can chain."""
+    def _expand(self, args: Any, source: str | None = None) -> Any:
+        """Substitute a prior tool result, so exfiltration can chain."""
         if isinstance(args, dict):
-            return {k: self._expand(v) for k, v in args.items()}
+            return {k: self._expand(v, source) for k, v in args.items()}
         if isinstance(args, list):
-            return [self._expand(v) for v in args]
+            return [self._expand(v, source) for v in args]
         if isinstance(args, str):
-            return (
-                args.replace("{{LAST_RESULT}}", self._last_result)
-                .replace(
-                    "{{LAST_RESULT_URLENC}}",
-                    urllib.parse.quote(self._last_result, safe=""),
-                )
-                .replace(
-                    "{{LAST_RESULT_B64}}",
-                    __import__("base64")
-                    .b64encode(self._last_result.encode())
-                    .decode(),
-                )
-            )
+            return self._template(args, source)
         return args
+
+    def _template(self, text: str, source: str | None = None) -> str:
+        last = source if source is not None else self._last_result
+        out = (
+            text.replace("{{LAST_RESULT}}", last)
+            .replace("{{LAST_RESULT_URLENC}}", urllib.parse.quote(last, safe=""))
+            .replace("{{LAST_RESULT_B64}}", base64.b64encode(last.encode()).decode())
+            # Reversal is the cheapest transform no substring matcher can
+            # follow. It stands in for any semantic restatement: an agent that
+            # paraphrases a secret rather than copying it produces the same
+            # problem, and cannot be caught by looking for shared text.
+            .replace("{{LAST_RESULT_REVERSED}}", last[::-1])
+        )
+        # {{LAST_RESULT_SLICE:start:end}} carries a fragment, so a secret can
+        # be split across many calls that are each individually unremarkable.
+        for match in SLICE_RE.finditer(out):
+            start, end = int(match.group("start")), int(match.group("end"))
+            out = out.replace(match.group(0), urllib.parse.quote(last[start:end], safe=""))
+        return out

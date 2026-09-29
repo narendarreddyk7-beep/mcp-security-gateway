@@ -37,10 +37,12 @@ class ToolResult:
 
 
 class McpClient:
-    def __init__(self, name: str, cmd: list[str], cwd: str | None = None):
+    def __init__(self, name: str, cmd: list[str], cwd: str | None = None,
+                 env: dict | None = None):
         self.name = name
         self.cmd = cmd
         self._next_id = 0
+        import os
         self._proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -49,6 +51,7 @@ class McpClient:
             cwd=cwd,
             text=True,
             bufsize=1,
+            env={**os.environ, **(env or {})},
         )
         self._stderr: list[str] = []
         threading.Thread(target=self._drain_stderr, daemon=True).start()

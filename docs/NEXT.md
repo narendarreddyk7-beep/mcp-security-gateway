@@ -43,13 +43,28 @@ Build the exploit before the fix, so there is always a demo and an oracle.
 - [ ] chunked exfiltration (s06) will likely defeat the 24-character overlap
       threshold. Vary MIN_OVERLAP and report the sensitivity curve.
 
-## Week 5 — inspectors + full suite
-- [ ] three layers, shared signal contract with a `version` field
-- [ ] s02 (tool-description poisoning), s03 (calendar invite),
-      s05 (rug pull), s06 (chunked exfiltration)
-- [ ] ~12 benign controls, including ones that *look* suspicious
-- [ ] lone-surrogate / homoglyph / zero-width obfuscation scenario
-- **Milestone:** four-row ablation table, five repetitions per scenario.
+## Week 5 — scenarios + the finding
+- [x] s02 tool-description poisoning (blocked by scoping; flagged by auditor)
+- [x] s03 calendar invite (injection from unaccepted event)
+- [x] s06 chunked exfiltration - DEFEATS fine-grained taint, caught by coarse
+- [x] benign controls b04 (security article), b05 (calendar read)
+- [x] per-scenario attack-success breakdown in the benchmark
+- [x] agent models manifest-time directives and chunked/transformed carriage
+- [ ] s05 rug pull (server changes its manifest after approval)
+- [ ] run with --repeat 5 once a real model backend exists; harness is ready
+- **Milestone: DONE.** The layered argument is now visible per-scenario, and
+  the chunked-exfil bypass of our own taint layer is a documented, tested
+  result rather than an unmeasured claim.
+
+### The finding, stated plainly for the README/demo
+Content-based taint tracking is defeated by fragmentation. s06 splits the
+secret into 6-char pieces; the 24-char overlap threshold never matches. Coarse
+taint catches it but blocks legitimate data sharing. This is the real,
+unsolved tension in the field - not a gap to apologise for.
+
+### Threshold sensitivity (worth a figure in the README)
+- [ ] sweep MIN_OVERLAP from 4 to 48, plot attack success vs false positives
+      for s06 and b02 together. The crossover point is the money chart.
 
 ## Week 6 — dashboard, README, demo
 - [ ] live session view, benchmark report (these two carry the interview)

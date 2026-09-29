@@ -65,6 +65,8 @@ def contains(needle: str, log_path: str | Path = LOG_PATH) -> bool:
         import base64, urllib.parse
         if needle in urllib.parse.unquote(blob):
             return True
+        if needle in blob[::-1] or needle in urllib.parse.unquote(blob)[::-1]:
+            return True
         for token in blob.replace("/", " ").replace("=", "= ").split():
             try:
                 if needle in base64.b64decode(token + "===").decode("utf-8", "ignore"):
@@ -72,6 +74,37 @@ def contains(needle: str, log_path: str | Path = LOG_PATH) -> bool:
             except Exception:
                 pass
     return False
+
+
+def reassembles(needle: str, log_path: str | Path = LOG_PATH) -> bool:
+    """Chunked exfiltration: no single request carries the secret, but the
+    concatenation of everything the sink received does.
+
+    The oracle has to be harder to fool than the defence. A ground truth that
+    only checks individual requests would report a gateway as secure while the
+    data walked out in eight pieces.
+    """
+    import urllib.parse
+
+    import re
+
+    # Concatenate the payload-bearing parts of each request: query-string
+    # values and bodies. Path prefixes like "/c?p=" are separators, not data.
+    parts: list[str] = []
+    for e in received(log_path):
+        q = urllib.parse.urlparse(e["path"]).query
+        for _, values in urllib.parse.parse_qs(q).items():
+            parts.extend(values)
+        if e["body"]:
+            parts.append(e["body"])
+    joined = "".join(parts)
+    if needle in joined:
+        return True
+    # Also try with all non-alphanumeric separators stripped, to catch a secret
+    # split mid-token across fragments.
+    stripped_needle = re.sub(r"[^A-Za-z0-9]", "", needle)
+    stripped_joined = re.sub(r"[^A-Za-z0-9]", "", joined)
+    return stripped_needle in stripped_joined
 
 
 def serve(port: int, log_path: str | Path) -> ThreadingHTTPServer:
