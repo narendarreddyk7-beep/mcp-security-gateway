@@ -67,9 +67,20 @@ unsolved tension in the field - not a gap to apologise for.
       for s06 and b02 together. The crossover point is the money chart.
 
 ## Week 6 — dashboard, README, demo
-- [ ] live session view, benchmark report (these two carry the interview)
-- [ ] server audit, approval queue, audit log explorer with "verify chain"
-- [ ] split-screen demo clip
-- [ ] limitations section, written before anyone asks
+- [x] FastAPI backend serving the audit log, taint, manifest, benchmark
+- [x] live session view: verdict per call, rule fired, taint labels,
+      manifest findings, chain-verify banner
+- [x] attacker-controlled strings escaped (no self-XSS)
+- [x] --demo flag: runs s01+s04 through the full gateway, then serves
+- [x] benchmark.json + sweep.json exported for the dashboard
+- [ ] benchmark report *page* in the dashboard (data is already served)
+- [ ] split-screen demo clip (record: none vs full on s04)
+- [ ] limitations section in the README
 
-If time runs short, cut dashboard pages 3-5. Never cut the benchmark.
+### Demo recording script (30s)
+1. `python3 -m dashboard.app --demo`, open the browser
+2. Point at the s04 session: fetch allowed, note read (taint: sensitive),
+   injected send DENIED by sensitive_egress, real send to Priya allowed
+3. Point at the manifest flag: private_read + egress exfiltration path
+4. Point at the chain-verify banner
+5. Cut to terminal: `python3 -m harness.bench` per-scenario table

@@ -56,6 +56,10 @@ python3 tests/test_week4.py              # taint tracking
 python3 tests/test_week5.py              # new scenarios + the finding
 python3 -m harness.bench                 # every scenario, every config
 python3 -m gateway.manifest.report audit.db
+
+# dashboard - runs the flagship attacks, then serves a live view
+python3 -m dashboard.app --demo
+# then open http://127.0.0.1:8000
 python3 -m gateway --db audit.db -- python3 servers/echo/server.py
 python3 -m gateway.audit.verify audit.db
 ```

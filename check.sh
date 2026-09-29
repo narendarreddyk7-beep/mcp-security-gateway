@@ -21,6 +21,7 @@ run "policy engine + manifest auditor" $PY tests/test_week3.py
 run "taint tracking"               $PY tests/test_week4.py
 run "new scenarios + the finding"  $PY tests/test_week5.py
 run "threshold sweep"              $PY -m harness.sweep
+run "dashboard imports"            $PY -c "import dashboard.app; print('[pass] dashboard API imports')"
 run "scenario benchmark"           $PY -m harness.bench
 
 if [ "$fail" -eq 0 ]; then
